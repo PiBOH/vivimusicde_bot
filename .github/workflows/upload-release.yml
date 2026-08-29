@@ -1,0 +1,58 @@
+name: Upload Release to Telegram
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional release tag to post (default: latest)"
+        required: false
+        type: string
+  schedule:
+    # Fallback: hourly poll in case the dispatch from vivi-music is not set up.
+    - cron: "0 * * * *"
+  repository_dispatch:
+    types: [release-published]
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ github.event.inputs.release_tag }}
+          DISPATCH_TAG: ${{ github.event.client_payload.tag }}
+        run: |
+          TAG="${INPUT_TAG:-}"
+          if [ -z "$TAG" ]; then TAG="${DISPATCH_TAG:-}"; fi
+          # Empty tag (schedule / manual without input): resolve the highest
+          # version ourselves so the dedupe key below is never blank.
+          if [ -z "$TAG" ]; then TAG="$(python3 bot.py --resolve-tag)"; fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Check if this tag was already posted
+        id: posted
+        uses: actions/cache@v4
+        with:
+          path: .posted
+          key: telegram-posted-${{ steps.tag.outputs.tag }}
+          fail-on-cache-miss: false
+
+      - name: Post release assets to Telegram
+        if: steps.posted.outputs.cache-hit != 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+          SOURCE_REPO: PiBOH/vivi-music
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: python3 bot.py
+
+      - name: Mark tag as posted
+        if: steps.posted.outputs.cache-hit != 'true' && success()
+        run: mkdir -p .posted && echo "${{ steps.tag.outputs.tag }}" > .posted/tag
