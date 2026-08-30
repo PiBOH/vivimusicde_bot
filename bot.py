@@ -267,7 +267,7 @@ def post_assets(release, assets):
         time.sleep(1)
 
     if to_link:
-        lines = ["📦 <b>Download links</b> (attached as files: {} only):".format(", ".join(sorted(ATTACHED_NAMES)))]
+        lines = ["📦 <b>Download links:</b>"]
         groups = {}
         for a in to_link:
             label = os_for_asset(a["name"]) or "Other"
