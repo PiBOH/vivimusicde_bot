@@ -7,6 +7,11 @@ on:
         description: "Optional release tag to post (default: latest)"
         required: false
         type: string
+      force_ignore_cache:
+        description: "Force re-post: ignore the per-tag dedupe cache"
+        required: false
+        type: boolean
+        default: false
   schedule:
     # Fallback: hourly poll in case the dispatch from vivi-music is not set up.
     - cron: "0 * * * *"
@@ -37,6 +42,10 @@ jobs:
 
       - name: Check if this tag was already posted
         id: posted
+        # When force_ignore_cache is toggled off we still run the cache check
+        # to avoid reposting an already-posted tag. When it is ON we skip this
+        # step entirely, so cache-hit stays unset and the post always runs.
+        if: ${{ github.event.inputs.force_ignore_cache != 'true' }}
         uses: actions/cache@v4
         with:
           path: .posted
