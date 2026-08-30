@@ -13,10 +13,8 @@ on:
         type: boolean
         default: false
   schedule:
-    # Fallback: hourly poll in case the dispatch from vivi-music is not set up.
-    - cron: "0 * * * *"
-  repository_dispatch:
-    types: [release-published]
+    # Daily run at midnight UTC: picks up the latest release automatically.
+    - cron: "0 0 * * *"
 
 permissions:
   contents: read
@@ -31,11 +29,9 @@ jobs:
         id: tag
         env:
           INPUT_TAG: ${{ github.event.inputs.release_tag }}
-          DISPATCH_TAG: ${{ github.event.client_payload.tag }}
         run: |
           TAG="${INPUT_TAG:-}"
-          if [ -z "$TAG" ]; then TAG="${DISPATCH_TAG:-}"; fi
-          # Empty tag (schedule / manual without input): resolve the highest
+          # Empty tag (schedule or manual without input): resolve the highest
           # version ourselves so the dedupe key below is never blank.
           if [ -z "$TAG" ]; then TAG="$(python3 bot.py --resolve-tag)"; fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
