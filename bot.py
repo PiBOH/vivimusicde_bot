@@ -196,6 +196,26 @@ def send_message(text):
     return tg_api("sendMessage", fields)
 
 
+def os_for_asset(name):
+    """Return the target OS label for a release asset based on its format."""
+    lowered = (name or "").lower()
+    if lowered.endswith(".exe") or lowered.endswith(".msi"):
+        return "Windows 10+"
+    if lowered.endswith(".deb"):
+        return "Debian/Ubuntu"
+    if lowered.endswith(".appimage"):
+        return "Linux (AppImage)"
+    if "pkgbuild" in lowered:
+        return "Arch Linux (AUR)"
+    if "srcinfo" in lowered:
+        return "Arch Linux (AUR)"
+    if lowered.endswith(".dmg") or lowered.endswith(".pkg"):
+        return "macOS"
+    if lowered.endswith(".md") or lowered.endswith(".txt"):
+        return "Guide"
+    return ""
+
+
 def post_assets(release, assets):
     failures = 0
     to_attach = [
@@ -242,7 +262,10 @@ def post_assets(release, assets):
         for a in to_link:
             name = a["name"]
             size = human_size(a.get("size", 0))
-            lines.append('• <a href="{}">{}</a> ({})'.format(a.get("browser_download_url", ""), name, size))
+            os_label = os_for_asset(name)
+            suffix = "  ({})".format(os_label) if os_label else ""
+            lines.append('• <a href="{}">{}</a> ({}){}'.format(
+                a.get("browser_download_url", ""), name, size, suffix))
         print("Posting {} download links...".format(len(to_link)))
         try:
             result = send_message("\n".join(lines))
