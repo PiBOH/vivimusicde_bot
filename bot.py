@@ -184,6 +184,10 @@ def send_document(file_bytes, filename, content_type, caption=None):
 
 MAX_DOCUMENT_BYTES = 50 * 1024 * 1024  # Telegram Bot API upload limit per document
 
+# Only these assets are attached as files; every other asset is posted as a
+# download link (the bot API caps uploads, and the installers are huge).
+ATTACHED_NAMES = {"INSTALL-GUIDE.md"}
+
 
 def send_message(text):
     fields = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
@@ -194,19 +198,18 @@ def send_message(text):
 
 def post_assets(release, assets):
     failures = 0
-    # Files above the 50 MB Bot API limit cannot be uploaded as documents, so
-    # we post their download links in a follow-up message instead.
-    small = [a for a in assets if a.get("size", 0) <= MAX_DOCUMENT_BYTES]
-    large = [a for a in assets if a.get("size", 0) > MAX_DOCUMENT_BYTES]
+    to_attach = [
+        a for a in assets
+        if a["name"] in ATTACHED_NAMES and a.get("size", 0) <= MAX_DOCUMENT_BYTES
+    ]
+    to_link = [a for a in assets if a not in to_attach]
     caption = build_caption(release, assets) if assets else None
-    first = True
 
-    for asset in small:
+    for asset in to_attach:
         filename = asset["name"]
         url = asset["browser_download_url"]
         ext = "." + (filename.rsplit(".", 1)[-1].lower() if "." in filename else "")
         content_type = MIME_BY_EXT.get(ext, "application/octet-stream")
-        cap = caption if first else None
 
         print("Downloading {} ({} bytes)...".format(filename, asset.get("size", "?")))
         try:
@@ -222,7 +225,7 @@ def post_assets(release, assets):
         for attempt in (1, 2):
             try:
                 print("Uploading {} ({} bytes)...".format(filename, len(data)))
-                result = send_document(data, filename, content_type, cap)
+                result = send_document(data, filename, content_type, caption)
                 if result.get("ok"):
                     print("OK: {}".format(filename))
                     posted = True
@@ -232,35 +235,30 @@ def post_assets(release, assets):
                 print("Attempt {} failed for {}: {}".format(attempt, filename, e))
         if not posted:
             failures += 1
-            print("Giving up on {}".format(filename))
-        elif first:
-            first = False  # only the first asset carries the caption
         time.sleep(1)
 
-    if large:
-        lines = [
-            "📦 <b>Too large to attach</b> (Telegram's 50 MB limit) — download from the release:"
-        ]
-        for a in large:
+    if to_link:
+        lines = ["📦 <b>Download links</b> (attached as files: {} only):".format(", ".join(sorted(ATTACHED_NAMES)))]
+        for a in to_link:
             name = a["name"]
             size = human_size(a.get("size", 0))
             lines.append('• <a href="{}">{}</a> ({})'.format(a.get("browser_download_url", ""), name, size))
-        print("Posting {} large-file download links...".format(len(large)))
+        print("Posting {} download links...".format(len(to_link)))
         try:
             result = send_message("\n".join(lines))
             if result.get("ok"):
-                print("OK: posted {} large-file download links".format(len(large)))
+                print("OK: posted {} download links".format(len(to_link)))
             else:
-                print("ERROR posting large-file links: {}".format(result.get("description")))
+                print("ERROR posting download links: {}".format(result.get("description")))
                 failures += 1
         except Exception as e:
-            print("ERROR posting large-file links: {}".format(e))
+            print("ERROR posting download links: {}".format(e))
             failures += 1
 
     if failures:
         print("DONE with {} failure(s)".format(failures))
         sys.exit(1)
-    print("DONE: {} asset(s) posted".format(len(small)))
+    print("DONE: {} attached + {} link(s) posted".format(len(to_attach), len(to_link)))
 
 
 def resolve_latest_tag():
