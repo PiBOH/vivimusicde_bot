@@ -225,6 +225,29 @@ def os_for_asset(name):
     return ""
 
 
+# Display order for the OS categories in the release message.
+OS_ORDER = [
+    "Windows 10+",
+    "Windows 11 ARM+",
+    "Debian/Ubuntu",
+    "Linux (AppImage)",
+    "Arch Linux (AUR)",
+    "Linux 64-bit",
+    "macOS 10.15+ (Intel)",
+    "macOS 11+ (Apple Silicon)",
+    "macOS",
+    "Guide",
+]
+
+
+def os_rank(label):
+    """Sort key for the OS categories: explicit order first, others after."""
+    try:
+        return OS_ORDER.index(label)
+    except ValueError:
+        return len(OS_ORDER)
+
+
 def post_assets(release, assets):
     failures = 0
     to_attach = [
@@ -272,7 +295,7 @@ def post_assets(release, assets):
         for a in to_link:
             label = os_for_asset(a["name"]) or "Other"
             groups.setdefault(label, []).append(a)
-        for label in sorted(groups, key=str.lower):
+        for label in sorted(groups, key=os_rank):
             lines.append("\n<b>{}</b>".format(label))
             for a in groups[label]:
                 name = a["name"]
