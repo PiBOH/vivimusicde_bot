@@ -268,13 +268,17 @@ def post_assets(release, assets):
 
     if to_link:
         lines = ["📦 <b>Download links</b> (attached as files: {} only):".format(", ".join(sorted(ATTACHED_NAMES)))]
+        groups = {}
         for a in to_link:
-            name = a["name"]
-            size = human_size(a.get("size", 0))
-            os_label = os_for_asset(name)
-            suffix = "  ({})".format(os_label) if os_label else ""
-            lines.append('• <a href="{}">{}</a> ({}){}'.format(
-                a.get("browser_download_url", ""), name, size, suffix))
+            label = os_for_asset(a["name"]) or "Other"
+            groups.setdefault(label, []).append(a)
+        for label in sorted(groups, key=str.lower):
+            lines.append("\n<b>{}</b>".format(label))
+            for a in groups[label]:
+                name = a["name"]
+                size = human_size(a.get("size", 0))
+                lines.append('• <a href="{}">{}</a> ({})'.format(
+                    a.get("browser_download_url", ""), name, size))
         print("Posting {} download links...".format(len(to_link)))
         try:
             result = send_message("\n".join(lines))
