@@ -197,8 +197,17 @@ def send_message(text):
 
 
 def os_for_asset(name):
-    """Return the target OS label for a release asset based on its format."""
+    """Return the target OS + minimum version label for a release asset."""
     lowered = (name or "").lower()
+    if "arm64" in lowered:
+        if lowered.endswith(".dmg") or lowered.endswith(".pkg"):
+            return "macOS 11+ (Apple Silicon)"
+        if lowered.endswith(".exe") or lowered.endswith(".msi"):
+            return "Windows 11 ARM+"
+    if "x64" in lowered and (lowered.endswith(".dmg") or lowered.endswith(".pkg")):
+        return "macOS 10.15+ (Intel)"
+    if "x86_64" in lowered:
+        return "Linux 64-bit"
     if lowered.endswith(".exe") or lowered.endswith(".msi"):
         return "Windows 10+"
     if lowered.endswith(".deb"):
