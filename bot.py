@@ -31,7 +31,7 @@ import urllib.error
 SOURCE_REPO = os.environ.get("SOURCE_REPO", "PiBOH/vivi-music")
 RELEASE_TAG = (os.environ.get("RELEASE_TAG") or "").strip()
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "@vivimusicde")
+CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID") or "@vivimusicde"
 THREAD_ID = (os.environ.get("TELEGRAM_THREAD_ID") or "").strip()
 
 EXCLUDED_SUFFIXES = (".log", ".apk")
@@ -182,14 +182,31 @@ def send_document(file_bytes, filename, content_type, caption=None):
     return tg_api("sendDocument", fields)
 
 
+MAX_DOCUMENT_BYTES = 50 * 1024 * 1024  # Telegram Bot API upload limit per document
+
+
+def send_message(text):
+    fields = {"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
+    if THREAD_ID:
+        fields["message_thread_id"] = THREAD_ID
+    return tg_api("sendMessage", fields)
+
+
 def post_assets(release, assets):
     failures = 0
-    for i, asset in enumerate(assets):
+    # Files above the 50 MB Bot API limit cannot be uploaded as documents, so
+    # we post their download links in a follow-up message instead.
+    small = [a for a in assets if a.get("size", 0) <= MAX_DOCUMENT_BYTES]
+    large = [a for a in assets if a.get("size", 0) > MAX_DOCUMENT_BYTES]
+    caption = build_caption(release, assets) if assets else None
+    first = True
+
+    for asset in small:
         filename = asset["name"]
         url = asset["browser_download_url"]
         ext = "." + (filename.rsplit(".", 1)[-1].lower() if "." in filename else "")
         content_type = MIME_BY_EXT.get(ext, "application/octet-stream")
-        caption = build_caption(release, assets) if i == 0 else None
+        cap = caption if first else None
 
         print("Downloading {} ({} bytes)...".format(filename, asset.get("size", "?")))
         try:
@@ -201,26 +218,49 @@ def post_assets(release, assets):
             failures += 1
             continue
 
+        posted = False
         for attempt in (1, 2):
             try:
-                print("Uploading to Telegram ({} / {})...".format(i + 1, len(assets)))
-                result = send_document(data, filename, content_type, caption)
+                print("Uploading {} ({} bytes)...".format(filename, len(data)))
+                result = send_document(data, filename, content_type, cap)
                 if result.get("ok"):
                     print("OK: {}".format(filename))
-                    caption = None  # only the first asset carries the caption
+                    posted = True
                     break
                 raise RuntimeError(result.get("description", "unknown error"))
             except Exception as e:
                 print("Attempt {} failed for {}: {}".format(attempt, filename, e))
-                if attempt == 2:
-                    failures += 1
-                    print("Giving up on {}".format(filename))
+        if not posted:
+            failures += 1
+            print("Giving up on {}".format(filename))
+        elif first:
+            first = False  # only the first asset carries the caption
         time.sleep(1)
+
+    if large:
+        lines = [
+            "📦 <b>Too large to attach</b> (Telegram's 50 MB limit) — download from the release:"
+        ]
+        for a in large:
+            name = a["name"]
+            size = human_size(a.get("size", 0))
+            lines.append('• <a href="{}">{}</a> ({})'.format(a.get("browser_download_url", ""), name, size))
+        print("Posting {} large-file download links...".format(len(large)))
+        try:
+            result = send_message("\n".join(lines))
+            if result.get("ok"):
+                print("OK: posted {} large-file download links".format(len(large)))
+            else:
+                print("ERROR posting large-file links: {}".format(result.get("description")))
+                failures += 1
+        except Exception as e:
+            print("ERROR posting large-file links: {}".format(e))
+            failures += 1
 
     if failures:
         print("DONE with {} failure(s)".format(failures))
         sys.exit(1)
-    print("DONE: {} asset(s) posted".format(len(assets)))
+    print("DONE: {} asset(s) posted".format(len(small)))
 
 
 def resolve_latest_tag():
