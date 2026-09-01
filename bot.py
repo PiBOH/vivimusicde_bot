@@ -96,6 +96,25 @@ def get_release():
     return released[-1]
 
 
+def get_commit_title(release):
+    """Return the title of the commit this release was built from.
+
+    Mirrors the "This release was built automatically from commit …" link on
+    the GitHub release page: we take `target_commitish` (the SHA the tag
+    points to), fetch the commit from the API and use its first subject line.
+    """
+    sha = (release.get("target_commitish") or "").strip()
+    if not sha:
+        return None
+    try:
+        commit = github_json(API_BASE + "/commits/" + urllib.parse.quote(sha))
+    except Exception:
+        return None
+    message = (commit.get("commit") or {}).get("message") or ""
+    title = message.split("\n", 1)[0].strip()
+    return title or None
+
+
 def is_excluded(name):
     lowered = name.lower()
     return lowered.endswith(EXCLUDED_SUFFIXES)
@@ -124,9 +143,14 @@ def build_caption(release, assets):
         "📦 <b>Files:</b> {} ({})".format(len(assets), formats),
         "📁 <b>Total size:</b> {}".format(human_size(total_bytes)),
         "🔗 <b>Release:</b> <a href=\"{}\">{}</a>".format(release_url, tag or name),
-        "━━━━━━━━━━━━━━━━━━━━",
-        "🚀 <i>Compiled automatically with the latest updates!</i>",
     ]
+    commit_title = get_commit_title(release)
+    if commit_title:
+        sha = release.get("target_commitish") or ""
+        commit_url = "https://github.com/{}/commit/{}".format(SOURCE_REPO, sha)
+        lines.append("💾 <b>Commit:</b> <a href=\"{}\">{}</a>".format(commit_url, commit_title))
+    lines.append("━━━━━━━━━━━━━━━━━━━━")
+    lines.append("🚀 <i>Compiled automatically with the latest updates!</i>")
     return "\n".join(lines)
 
 
@@ -248,6 +272,23 @@ def os_rank(label):
         return len(OS_ORDER)
 
 
+def build_links_text(assets):
+    """The download-links section: grouped by OS, one block per category."""
+    lines = ["📦 <b>Download links:</b>"]
+    groups = {}
+    for a in assets:
+        label = os_for_asset(a["name"]) or "Other"
+        groups.setdefault(label, []).append(a)
+    for label in sorted(groups, key=os_rank):
+        lines.append("\n<b>{}</b>".format(label))
+        for a in groups[label]:
+            name = a["name"]
+            size = human_size(a.get("size", 0))
+            lines.append('• <a href="{}">{}</a> ({})'.format(
+                a.get("browser_download_url", ""), name, size))
+    return "\n".join(lines)
+
+
 def post_assets(release, assets):
     failures = 0
     to_attach = [
@@ -255,7 +296,14 @@ def post_assets(release, assets):
         if a["name"] in ATTACHED_NAMES and a.get("size", 0) <= MAX_DOCUMENT_BYTES
     ]
     to_link = [a for a in assets if a not in to_attach]
-    caption = build_caption(release, assets) if assets else None
+    if not assets:
+        return
+    # ONE message for the whole release: the caption carries the release info
+    # and the download links, and is attached to the first uploaded file.
+    parts = [build_caption(release, assets)]
+    if to_link:
+        parts.append(build_links_text(to_link))
+    caption = "\n\n".join(parts)
 
     for asset in to_attach:
         filename = asset["name"]
@@ -289,35 +337,24 @@ def post_assets(release, assets):
             failures += 1
         time.sleep(1)
 
-    if to_link:
-        lines = ["📦 <b>Download links:</b>"]
-        groups = {}
-        for a in to_link:
-            label = os_for_asset(a["name"]) or "Other"
-            groups.setdefault(label, []).append(a)
-        for label in sorted(groups, key=os_rank):
-            lines.append("\n<b>{}</b>".format(label))
-            for a in groups[label]:
-                name = a["name"]
-                size = human_size(a.get("size", 0))
-                lines.append('• <a href="{}">{}</a> ({})'.format(
-                    a.get("browser_download_url", ""), name, size))
-        print("Posting {} download links...".format(len(to_link)))
+    # Fallback: if nothing could be attached (too large / download error),
+    # still post the one message as plain text so the release never vanishes.
+    if not to_attach:
         try:
-            result = send_message("\n".join(lines))
+            result = send_message(caption)
             if result.get("ok"):
-                print("OK: posted {} download links".format(len(to_link)))
+                print("OK: posted single message as text")
             else:
-                print("ERROR posting download links: {}".format(result.get("description")))
+                print("ERROR posting message: {}".format(result.get("description")))
                 failures += 1
         except Exception as e:
-            print("ERROR posting download links: {}".format(e))
+            print("ERROR posting message: {}".format(e))
             failures += 1
 
     if failures:
         print("DONE with {} failure(s)".format(failures))
         sys.exit(1)
-    print("DONE: {} attached + {} link(s) posted".format(len(to_attach), len(to_link)))
+    print("DONE: {} attached + {} link(s) posted in one message".format(len(to_attach), len(to_link)))
 
 
 def resolve_latest_tag():
