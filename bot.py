@@ -4,10 +4,10 @@
 
 Mirrors the behaviour of the original Vivi Music bot (vivizzz007): a
 GitHub Actions workflow downloads the release and posts it to the channel
-through the Bot API: one HTML text message per release carrying the version,
-commit and grouped download links, plus any attached file (INSTALL-GUIDE.md)
-posted right next to it WITHOUT a caption (sendDocument captions are capped
-at 1024 chars — the links message is far over that).
+through the Bot API: the attached file (INSTALL-GUIDE.md) keeps the release
+header as its caption (version, commit, sizes — under the 1024-char
+sendDocument caption limit), and the grouped download links are posted as a
+separate HTML text message right after it (they cannot fit in a caption).
 
 Excluded assets: *.log and *.apk (the setup log and the mobile APK).
 
@@ -311,29 +311,17 @@ def post_assets(release, assets):
     to_link = [a for a in assets if a not in to_attach]
     if not assets:
         return
-    # The release text (header + download links) is sent as a normal text
-    # message: sendDocument caps captions at 1024 chars and the links block is
-    # far over that (this was the HTTP 400 that killed every run). The guide
-    # file is attached separately WITHOUT a caption, right next to the message.
-    parts = [build_caption(release, assets)]
-    if to_link:
-        parts.append(build_links_text(to_link))
-    text = "\n\n".join(parts)
+    # The original one-caption-per-release design is kept: the release header
+    # (version, files, total size, commit link) is the caption of the attached
+    # guide — it fits Telegram's 1024-char sendDocument caption limit (721
+    # chars for a real release). The download-links block (~1.8k chars) cannot
+    # fit in any caption, so it is posted as its own text message right after
+    # the file (this split is what fixes the HTTP 400 that killed every run).
+    caption = build_caption(release, assets)
 
-    # 1) The announcement is the critical message: it must always go out.
-    try:
-        result = send_message(text)
-        if result.get("ok"):
-            print("OK: posted release message with download links")
-        else:
-            print("ERROR posting message: {}".format(result.get("description")))
-            failures += 1
-    except Exception as e:
-        print("ERROR posting message: {}".format(e))
-        failures += 1
-
-    # 2) Attached files are best-effort: a failure here must NOT turn the run
-    #    red, because the announcement above already went out.
+    # 1) Attach the guide WITH the release header as caption. Best-effort:
+    #    a failure here must NOT turn the run red — the links message below
+    #    (the critical part) still goes out.
     for asset in to_attach:
         filename = asset["name"]
         url = asset["browser_download_url"]
@@ -353,7 +341,7 @@ def post_assets(release, assets):
         for attempt in (1, 2):
             try:
                 print("Uploading {} ({} bytes)...".format(filename, len(data)))
-                result = send_document(data, filename, content_type)  # no caption
+                result = send_document(data, filename, content_type, caption)
                 if result.get("ok"):
                     print("OK: {}".format(filename))
                     posted = True
@@ -362,13 +350,26 @@ def post_assets(release, assets):
             except Exception as e:
                 print("Attempt {} failed for {}: {}".format(attempt, filename, e))
         if not posted:
-            print("WARNING: {} not attached — the release message was still posted".format(filename))
+            print("WARNING: {} not attached — the download-links message below is still posted".format(filename))
         time.sleep(1)
+
+    # 2) The download links are the critical message: they must always go out.
+    if to_link:
+        try:
+            result = send_message(build_links_text(to_link))
+            if result.get("ok"):
+                print("OK: posted download links")
+            else:
+                print("ERROR posting download links: {}".format(result.get("description")))
+                failures += 1
+        except Exception as e:
+            print("ERROR posting download links: {}".format(e))
+            failures += 1
 
     if failures:
         print("DONE with {} failure(s)".format(failures))
         sys.exit(1)
-    print("DONE: message posted + {} attached file(s)".format(len(to_attach)))
+    print("DONE: {} attached file(s) + download links posted".format(len(to_attach)))
 
 
 def resolve_latest_tag():
