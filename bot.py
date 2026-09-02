@@ -4,7 +4,10 @@
 
 Mirrors the behaviour of the original Vivi Music bot (vivizzz007): a
 GitHub Actions workflow downloads the release and posts it to the channel
-through the Bot API, with one HTML caption per release (not per asset).
+through the Bot API: one HTML text message per release carrying the version,
+commit and grouped download links, plus any attached file (INSTALL-GUIDE.md)
+posted right next to it WITHOUT a caption (sendDocument captions are capped
+at 1024 chars — the links message is far over that).
 
 Excluded assets: *.log and *.apk (the setup log and the mobile APK).
 
@@ -188,8 +191,18 @@ def tg_api(method, fields):
         headers={"Content-Type": "multipart/form-data; boundary=" + boundary},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=600) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=600) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        # Telegram's error body carries the real reason (e.g. "caption is too
+        # long"); urllib's default message hides it, so re-raise with the body.
+        reason = ""
+        try:
+            reason = e.read().decode("utf-8", "replace")
+        except Exception:
+            pass
+        raise RuntimeError("HTTP {} {}{}".format(e.code, e.reason, " — " + reason if reason else "")) from e
 
 
 def send_document(file_bytes, filename, content_type, caption=None):
@@ -298,13 +311,29 @@ def post_assets(release, assets):
     to_link = [a for a in assets if a not in to_attach]
     if not assets:
         return
-    # ONE message for the whole release: the caption carries the release info
-    # and the download links, and is attached to the first uploaded file.
+    # The release text (header + download links) is sent as a normal text
+    # message: sendDocument caps captions at 1024 chars and the links block is
+    # far over that (this was the HTTP 400 that killed every run). The guide
+    # file is attached separately WITHOUT a caption, right next to the message.
     parts = [build_caption(release, assets)]
     if to_link:
         parts.append(build_links_text(to_link))
-    caption = "\n\n".join(parts)
+    text = "\n\n".join(parts)
 
+    # 1) The announcement is the critical message: it must always go out.
+    try:
+        result = send_message(text)
+        if result.get("ok"):
+            print("OK: posted release message with download links")
+        else:
+            print("ERROR posting message: {}".format(result.get("description")))
+            failures += 1
+    except Exception as e:
+        print("ERROR posting message: {}".format(e))
+        failures += 1
+
+    # 2) Attached files are best-effort: a failure here must NOT turn the run
+    #    red, because the announcement above already went out.
     for asset in to_attach:
         filename = asset["name"]
         url = asset["browser_download_url"]
@@ -318,14 +347,13 @@ def post_assets(release, assets):
                 data = resp.read()
         except Exception as e:
             print("ERROR downloading {}: {}".format(filename, e))
-            failures += 1
             continue
 
         posted = False
         for attempt in (1, 2):
             try:
                 print("Uploading {} ({} bytes)...".format(filename, len(data)))
-                result = send_document(data, filename, content_type, caption)
+                result = send_document(data, filename, content_type)  # no caption
                 if result.get("ok"):
                     print("OK: {}".format(filename))
                     posted = True
@@ -334,27 +362,13 @@ def post_assets(release, assets):
             except Exception as e:
                 print("Attempt {} failed for {}: {}".format(attempt, filename, e))
         if not posted:
-            failures += 1
+            print("WARNING: {} not attached — the release message was still posted".format(filename))
         time.sleep(1)
-
-    # Fallback: if nothing could be attached (too large / download error),
-    # still post the one message as plain text so the release never vanishes.
-    if not to_attach:
-        try:
-            result = send_message(caption)
-            if result.get("ok"):
-                print("OK: posted single message as text")
-            else:
-                print("ERROR posting message: {}".format(result.get("description")))
-                failures += 1
-        except Exception as e:
-            print("ERROR posting message: {}".format(e))
-            failures += 1
 
     if failures:
         print("DONE with {} failure(s)".format(failures))
         sys.exit(1)
-    print("DONE: {} attached + {} link(s) posted in one message".format(len(to_attach), len(to_link)))
+    print("DONE: message posted + {} attached file(s)".format(len(to_attach)))
 
 
 def resolve_latest_tag():

@@ -23,7 +23,7 @@ jobs:
   upload:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Resolve release tag
         id: tag
@@ -42,7 +42,7 @@ jobs:
         # to avoid reposting an already-posted tag. When it is ON we skip this
         # step entirely, so cache-hit stays unset and the post always runs.
         if: ${{ github.event.inputs.force_ignore_cache != 'true' }}
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .posted
           key: telegram-posted-${{ steps.tag.outputs.tag }}
