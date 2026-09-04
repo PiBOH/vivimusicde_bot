@@ -1,5 +1,6 @@
 # vivimusicde_bot
 [![Upload Release to Telegram](https://github.com/PiBOH/vivimusicde_bot/actions/workflows/upload-release.yml/badge.svg)](https://github.com/PiBOH/vivimusicde_bot/actions/workflows/upload-release.yml)
+
 Source code for the **@vivimusicde_bot** — the bot that posts VIVI Music DE
 release assets to the [https://t.me/vivimusicde](https://t.me/vivimusicde)
 channel. Its behaviour mirrors the original bot by vivizzz007: a GitHub
