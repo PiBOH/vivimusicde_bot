@@ -22,8 +22,7 @@ its assets to the channel through the Telegram Bot API.
 
 | Trigger | When |
 |---|---|
-| `repository_dispatch` | A `release-published` dispatch sent by `PiBOH/vivi-music`'s `auto-release.yml` right after a release is created (instant) |
-| `schedule` | Hourly fallback poll in case the dispatch is not configured |
+| `schedule` | Hourly poll: posts a new release within ~60 minutes |
 | `workflow_dispatch` | Manual run from the Actions tab (optional `release_tag` input) |
 
 ## Setup
@@ -37,11 +36,6 @@ its assets to the channel through the Telegram Bot API.
      `@vivimusicde`; for a private channel use the numeric id (e.g.
      `-1001234567890`). If unset, the bot defaults to `@vivimusicde`.
    - `TELEGRAM_THREAD_ID` — optional, only if the channel uses forum topics.
-3. **Instant trigger (optional)**: in `PiBOH/vivi-music`, add the secret
-   `BOT_DISPATCH_TOKEN` (a PAT with `repo` + `workflow` scope). The
-   `auto-release.yml` there will send the dispatch automatically after each
-   release. Without it, the hourly poll still covers everything (up to 60
-   minutes delay).
 
 ## Run locally (test)
 

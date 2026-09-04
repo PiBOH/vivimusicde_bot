@@ -13,8 +13,8 @@ on:
         type: boolean
         default: false
   schedule:
-    # Daily run at midnight UTC: picks up the latest release automatically.
-    - cron: "0 0 * * *"
+    # Every hour: picks up a newly published release within ~60 minutes.
+    - cron: "0 * * * *"
 
 permissions:
   contents: read

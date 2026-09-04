@@ -9,7 +9,8 @@ header as its caption (version, commit, sizes — under the 1024-char
 sendDocument caption limit), and the grouped download links are posted as a
 separate HTML text message right after it (they cannot fit in a caption).
 
-Excluded assets: *.log and *.apk (the setup log and the mobile APK).
+Excluded assets: *.log, *.apk and *.install (the setup log, the mobile
+APK and the AUR packaging helper file).
 
 Environment variables:
   TELEGRAM_BOT_TOKEN  Bot token from @BotFather (required)
@@ -37,7 +38,7 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID") or "@vivimusicde"
 THREAD_ID = (os.environ.get("TELEGRAM_THREAD_ID") or "").strip()
 
-EXCLUDED_SUFFIXES = (".log", ".apk")
+EXCLUDED_SUFFIXES = (".log", ".apk", ".install")
 API_BASE = "https://api.github.com/repos/" + SOURCE_REPO
 TG_BASE = "https://api.telegram.org/bot" + BOT_TOKEN
 
