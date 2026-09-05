@@ -9,8 +9,9 @@ header as its caption (version, commit, sizes — under the 1024-char
 sendDocument caption limit), and the grouped download links are posted as a
 separate HTML text message right after it (they cannot fit in a caption).
 
-Excluded assets: *.log, *.apk and *.install (the setup log, the mobile
-APK and the AUR packaging helper file).
+Excluded assets: *.log and *.install (setup log and AUR packaging helper).
+The mobile APK is excluded by default; it is only re-included (as a download
+link) on manual runs with INCLUDE_CUSTOM_APK=true.
 
 Environment variables:
   TELEGRAM_BOT_TOKEN  Bot token from @BotFather (required)
@@ -18,6 +19,8 @@ Environment variables:
   TELEGRAM_THREAD_ID  Optional message_thread_id for forum topics
   SOURCE_REPO         GitHub repo whose releases we post (default: PiBOH/vivi-music)
   RELEASE_TAG         Optional: a specific tag to post (default: latest)
+  INCLUDE_CUSTOM_APK  When "true", also post the custom Android APK link
+                      (for manual dispatch runs; default: off)
 
 Exit code is 0 only if every asset was posted successfully.
 """
@@ -38,7 +41,9 @@ BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID") or "@vivimusicde"
 THREAD_ID = (os.environ.get("TELEGRAM_THREAD_ID") or "").strip()
 
-EXCLUDED_SUFFIXES = (".log", ".apk", ".install")
+EXCLUDED_SUFFIXES = (".log", ".install")
+APK_SUFFIX = ".apk"
+INCLUDE_CUSTOM_APK = (os.environ.get("INCLUDE_CUSTOM_APK") or "").strip().lower() in ("1", "true", "yes", "on")
 API_BASE = "https://api.github.com/repos/" + SOURCE_REPO
 TG_BASE = "https://api.telegram.org/bot" + BOT_TOKEN
 
@@ -121,6 +126,10 @@ def get_commit_title(release):
 
 def is_excluded(name):
     lowered = name.lower()
+    if lowered.endswith(APK_SUFFIX):
+        # The custom APK is excluded by default; manual runs can opt in
+        # (INCLUDE_CUSTOM_APK=true) to also post its download link.
+        return not INCLUDE_CUSTOM_APK
     return lowered.endswith(EXCLUDED_SUFFIXES)
 
 
@@ -258,6 +267,8 @@ def os_for_asset(name):
         return "Arch Linux (AUR)"
     if lowered.endswith(".dmg") or lowered.endswith(".pkg"):
         return "macOS"
+    if lowered.endswith(".apk"):
+        return "Android (APK)"
     if lowered.endswith(".md") or lowered.endswith(".txt"):
         return "Guide"
     return ""
@@ -275,6 +286,7 @@ OS_ORDER = [
     "macOS 11+ (Apple Silicon)",
     "macOS",
     "Guide",
+    "Android (APK)",
 ]
 
 

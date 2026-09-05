@@ -12,6 +12,11 @@ on:
         required: false
         type: boolean
         default: false
+      include_custom_apk:
+        description: "Also post the custom Android APK link (manual runs only)"
+        required: false
+        type: boolean
+        default: false
   schedule:
     # Every hour: picks up a newly published release within ~60 minutes.
     - cron: "0 * * * *"
@@ -56,6 +61,7 @@ jobs:
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
           SOURCE_REPO: PiBOH/vivi-music
           RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          INCLUDE_CUSTOM_APK: ${{ github.event.inputs.include_custom_apk == 'true' }}
         run: python3 bot.py
 
       - name: Mark tag as posted
