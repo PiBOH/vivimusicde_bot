@@ -72,22 +72,15 @@ def github_json(url, timeout=60):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def version_parts(tag):
-    match = re.findall(r"\d+(?:\.\d+)*", str(tag or ""))
-    if not match:
-        return []
-    return [int(n) for n in ".".join(match).split(".")]
+def by_published_at(r):
+    """Sort key: publish timestamp (ISO-8601 strings compare lexicographically).
 
-
-def by_version_desc(a, b):
-    pa, pb = version_parts(a.get("tag_name")), version_parts(b.get("tag_name"))
-    length = max(len(pa), len(pb))
-    for i in range(length):
-        av = pa[i] if i < len(pa) else 0
-        bv = pb[i] if i < len(pb) else 0
-        if av != bv:
-            return bv - av
-    return 0
+    Chronology defines "latest" — combined tags like 6.4.46.1_DE-1.50.27 vs the
+    NEWER 6.0.6.2_DE-1.50.29 are NOT comparable as version strings (the mobile
+    part 6.4.46.1 > 6.0.6.2 even though 6.0.6.2 is the newest release), so
+    sorting by the tag would pick an OLD release as "latest".
+    """
+    return r.get("published_at") or r.get("created_at") or ""
 
 
 def get_release():
@@ -95,13 +88,13 @@ def get_release():
         return github_json(API_BASE + "/releases/tags/" + urllib.parse.quote(RELEASE_TAG))
     # /releases/latest only resolves non-prerelease releases, but every VIVI
     # Music DE release carries a channel suffix (e.g. -nightly) and is a
-    # pre-release. So we list all releases and pick the one with the highest
-    # version in its tag, exactly like the website does.
+    # pre-release. So we list all releases and pick the most recently
+    # PUBLISHED one (chronology wins, never the version numbers in the tag).
     releases = github_json(API_BASE + "/releases?per_page=30")
     released = [r for r in releases if not r.get("draft")]
     if not released:
         raise RuntimeError("No published releases found in " + SOURCE_REPO)
-    released.sort(key=lambda r: version_parts(r.get("tag_name")))
+    released.sort(key=by_published_at)
     return released[-1]
 
 
@@ -398,7 +391,7 @@ def resolve_latest_tag():
     released = [r for r in releases if not r.get("draft")]
     if not released:
         raise RuntimeError("No published releases found in " + SOURCE_REPO)
-    released.sort(key=lambda r: version_parts(r.get("tag_name")))
+    released.sort(key=by_published_at)
     return released[-1]["tag_name"]
 
 
