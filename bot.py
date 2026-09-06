@@ -268,6 +268,12 @@ def os_for_asset(name):
     if lowered.endswith(".dmg") or lowered.endswith(".pkg"):
         return "macOS"
     if lowered.endswith(".apk"):
+        # The Android companion ships two variants: vivi-gsm.apk (with Google
+        # services) and vivi-foss.apk (without). Label them clearly.
+        if "vivi-gsm" in lowered:
+            return "Android (APK) — GMS (with Google services)"
+        if "vivi-foss" in lowered:
+            return "Android (APK) — FOSS (no Google services)"
         return "Android (APK)"
     if lowered.endswith(".md") or lowered.endswith(".txt"):
         return "Guide"
@@ -286,6 +292,8 @@ OS_ORDER = [
     "macOS 11+ (Apple Silicon)",
     "macOS",
     "Guide",
+    "Android (APK) — GMS (with Google services)",
+    "Android (APK) — FOSS (no Google services)",
     "Android (APK)",
 ]
 
