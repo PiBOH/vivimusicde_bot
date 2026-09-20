@@ -10,17 +10,21 @@ sendDocument caption limit), and the grouped download links are posted as a
 separate HTML text message right after it (they cannot fit in a caption).
 
 Excluded assets: *.log and *.install (setup log and AUR packaging helper).
-The mobile APK is excluded by default; it is only re-included (as a download
-link) on manual runs with INCLUDE_CUSTOM_APK=true.
+The APKs are no longer release assets: `Build Android APK` publishes them, with
+a manifest, to `.releases/apk/latest` on the `apk-latest` branch. Their two
+fixed links are added to the links message on manual runs with
+INCLUDE_CUSTOM_APK=true (off by default).
 
 Environment variables:
   TELEGRAM_BOT_TOKEN  Bot token from @BotFather (required)
   TELEGRAM_CHAT_ID    Channel to post to (default: @vivimusicde)
   TELEGRAM_THREAD_ID  Optional message_thread_id for forum topics
-  SOURCE_REPO         GitHub repo whose releases we post (default: PiBOH/vivi-music)
+  SOURCE_REPO         GitHub repo whose releases we post (default: PiBOH/vivi-music-de)
   RELEASE_TAG         Optional: a specific tag to post (default: latest)
-  INCLUDE_CUSTOM_APK  When "true", also post the custom Android APK link
-                      (for manual dispatch runs; default: off)
+  INCLUDE_CUSTOM_APK  When "true", also post the two custom Android APK links
+                      (vivi-gsm.apk / vivi-foss.apk, read from
+                      .releases/apk/latest on the apk-latest branch; manual
+                      dispatch runs only, default off)
 
 Exit code is 0 only if every asset was posted successfully.
 """
@@ -35,7 +39,7 @@ import urllib.parse
 import urllib.request
 import urllib.error
 
-SOURCE_REPO = os.environ.get("SOURCE_REPO", "PiBOH/vivi-music")
+SOURCE_REPO = os.environ.get("SOURCE_REPO", "PiBOH/vivi-music-de")
 RELEASE_TAG = (os.environ.get("RELEASE_TAG") or "").strip()
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID") or "@vivimusicde"
@@ -45,6 +49,10 @@ EXCLUDED_SUFFIXES = (".log", ".install")
 APK_SUFFIX = ".apk"
 INCLUDE_CUSTOM_APK = (os.environ.get("INCLUDE_CUSTOM_APK") or "").strip().lower() in ("1", "true", "yes", "on")
 API_BASE = "https://api.github.com/repos/" + SOURCE_REPO
+# Where the APKs live now (fixed raw URLs on the dedicated apk-latest branch,
+# recreated on every build; version.json next to them describes the build).
+APK_LATEST_BASE = "https://raw.githubusercontent.com/{}/apk-latest/.releases/apk/latest".format(SOURCE_REPO)
+APK_LATEST_MANIFEST = APK_LATEST_BASE + "/version.json"
 TG_BASE = "https://api.telegram.org/bot" + BOT_TOKEN
 
 MIME_BY_EXT = {
@@ -299,6 +307,39 @@ def os_rank(label):
         return len(OS_ORDER)
 
 
+def custom_apk_assets():
+    """The two custom-APK download links, built from the fixed raw URLs.
+
+    `Build Android APK` publishes vivi-gsm.apk / vivi-foss.apk (plus
+    version.json) to `.releases/apk/latest` on the `apk-latest` branch, so the
+    links never change; the manifest only supplies the sizes (and the build it
+    describes), and is optional — without it the links are posted without them.
+    """
+    sizes = {}
+    try:
+        manifest = github_json(APK_LATEST_MANIFEST)
+        print("APK manifest: version {}{} built {}".format(
+            manifest.get("version") or "?",
+            " (code {})".format(manifest.get("versionCode"))
+            if manifest.get("versionCode")
+            else "",
+            manifest.get("builtAt") or "?",
+        ))
+        for entry in manifest.get("files") or []:
+            if entry.get("name"):
+                sizes[entry["name"]] = entry.get("sizeBytes") or 0
+    except Exception as e:
+        print("NOTE: APK manifest not reachable ({}); posting the links without sizes".format(e))
+    return [
+        {
+            "name": name,
+            "size": sizes.get(name, 0),
+            "browser_download_url": APK_LATEST_BASE + "/" + name,
+        }
+        for name in ("vivi-gsm.apk", "vivi-foss.apk")
+    ]
+
+
 def build_links_text(assets):
     """The download-links section: grouped by OS, one block per category."""
     lines = ["📦 <b>Download links:</b>"]
@@ -310,9 +351,12 @@ def build_links_text(assets):
         lines.append("\n<b>{}</b>".format(label))
         for a in groups[label]:
             name = a["name"]
-            size = human_size(a.get("size", 0))
-            lines.append('• <a href="{}">{}</a> ({})'.format(
-                a.get("browser_download_url", ""), name, size))
+            size = a.get("size") or 0
+            # The custom-APK links have no size when the manifest is not
+            # reachable: show the link alone rather than "0.0 B".
+            suffix = " ({})".format(human_size(size)) if size else ""
+            lines.append('• <a href="{}">{}</a>{}'.format(
+                a.get("browser_download_url", ""), name, suffix))
     return "\n".join(lines)
 
 
@@ -408,6 +452,12 @@ def main():
     release = get_release()
     tag = release.get("tag_name") or "?"
     assets = [a for a in release.get("assets", []) if not is_excluded(a.get("name", ""))]
+    if INCLUDE_CUSTOM_APK:
+        # The APKs are not release assets any more: the two fixed links come
+        # from .releases/apk/latest on the apk-latest branch.
+        extra = custom_apk_assets()
+        assets.extend(extra)
+        print("Adding the custom APK links: {}".format([a["name"] for a in extra]))
     excluded = [a["name"] for a in release.get("assets", []) if is_excluded(a.get("name", ""))]
 
     print("Release: {}".format(tag))

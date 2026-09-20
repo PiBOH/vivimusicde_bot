@@ -13,7 +13,7 @@ on:
         type: boolean
         default: false
       include_custom_apk:
-        description: "Also post the custom Android APK links — vivi-gsm.apk / vivi-foss.apk (manual runs only)"
+        description: "Also post the custom Android APK links — vivi-gsm.apk / vivi-foss.apk from .releases/apk/latest (manual runs only)"
         required: false
         type: boolean
         default: false
@@ -59,7 +59,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
-          SOURCE_REPO: PiBOH/vivi-music
+          SOURCE_REPO: PiBOH/vivi-music-de
           RELEASE_TAG: ${{ steps.tag.outputs.tag }}
           INCLUDE_CUSTOM_APK: ${{ github.event.inputs.include_custom_apk == 'true' }}
         run: python3 bot.py

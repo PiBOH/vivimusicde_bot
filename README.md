@@ -4,26 +4,35 @@
 Source code for the **@vivimusicde_bot** — the bot that posts VIVI Music DE
 release assets to the [https://t.me/vivimusicde](https://t.me/vivimusicde)
 channel. Its behaviour mirrors the original bot by vivizzz007: a GitHub
-Actions workflow grabs the latest release from `PiBOH/vivi-music` and uploads
-its assets to the channel through the Telegram Bot API.
+Actions workflow grabs the latest release from `PiBOH/vivi-music-de` (resolved
+by publish date, not by comparing tag strings) and posts it to the channel
+through the Telegram Bot API.
 
 ## What it does
 
-- Fetches the latest release (or a specific tag) from `PiBOH/vivi-music`.
-- Downloads every asset **except `*.log` and `*.apk`** (the Inno Setup log and
-  the mobile APK are skipped).
+- Fetches the latest release (or a specific tag) from `PiBOH/vivi-music-de`.
+- Downloads every asset **except `*.log` and `*.install`** (the Inno Setup log
+  and the AUR packaging helper are skipped).
 - Uploads the assets to `@vivimusicde` with a **single caption per release**
   (version, files, total size, link to the release), in the same style as the
   original bot.
 - Deduplicates: each release tag is posted at most once (a cache marker per
   tag), so manual re-runs or overlapping triggers never double-post.
 
+## Custom Android APK
+
+The APKs are **not** release assets any more: `Build Android APK` publishes
+`vivi-gsm.apk`, `vivi-foss.apk` and a `version.json` to `.releases/apk/latest`
+on the `apk-latest` branch. The bot does not post them by default; a **manual**
+run can toggle `include_custom_apk` on and it appends the two fixed links
+(sizes read from that `version.json` when reachable).
+
 ## How it is triggered
 
 | Trigger | When |
 |---|---|
 | `schedule` | Hourly poll: posts a new release within ~60 minutes |
-| `workflow_dispatch` | Manual run from the Actions tab (optional `release_tag` input) |
+| `workflow_dispatch` | Manual run from the Actions tab (`release_tag`, `force_ignore_cache`, `include_custom_apk`) |
 
 ## Setup
 
