@@ -12,7 +12,11 @@ through the Telegram Bot API.
 
 - Fetches the latest release (or a specific tag) from `PiBOH/vivi-music-de`.
 - Downloads every asset **except `*.log` and `*.install`** (the Inno Setup log
-  and the AUR packaging helper are skipped).
+  and, defensively, the AUR hook — which no longer shows up in a release: the
+  AUR files now ship together in `VIVIMusic-<version>-AUR.tar.gz`).
+- Groups the download links by platform, including the native **Fedora/RHEL
+  `.rpm`** and the Arch/AUR archive, next to the `.deb`, AppImage, Windows and
+  macOS installers.
 - Uploads the assets to `@vivimusicde` with a **single caption per release**
   (version, files, total size, link to the release), in the same style as the
   original bot.

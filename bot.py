@@ -9,7 +9,9 @@ header as its caption (version, commit, sizes — under the 1024-char
 sendDocument caption limit), and the grouped download links are posted as a
 separate HTML text message right after it (they cannot fit in a caption).
 
-Excluded assets: *.log and *.install (setup log and AUR packaging helper).
+Excluded assets: *.log (setup log) — and *.install, which no longer appears in a
+release anyway: the AUR files (PKGBUILD, SRCINFO and that hook) ship packed in
+the `VIVIMusic-<version>-AUR.tar.gz` asset.
 The APKs are no longer release assets: `Build Android APK` publishes them, with
 a manifest, to `.releases/apk/latest` on the `apk-latest` branch. Their two
 fixed links are added to the links message on manual runs with
@@ -260,8 +262,14 @@ def os_for_asset(name):
         return "Windows 10+"
     if lowered.endswith(".deb"):
         return "Debian/Ubuntu"
+    if lowered.endswith(".rpm"):
+        return "Fedora / RHEL (.rpm)"
     if lowered.endswith(".appimage"):
         return "Linux (AppImage)"
+    # The AUR files travel as one archive (`…-AUR.tar.gz`); the loose names are
+    # kept for older releases, which carried PKGBUILD/SRCINFO separately.
+    if ".tar.gz" in lowered and "aur" in lowered:
+        return "Arch Linux (AUR)"
     if "pkgbuild" in lowered:
         return "Arch Linux (AUR)"
     if "srcinfo" in lowered:
@@ -286,6 +294,7 @@ OS_ORDER = [
     "Windows 10+",
     "Windows 11 ARM+",
     "Debian/Ubuntu",
+    "Fedora / RHEL (.rpm)",
     "Linux (AppImage)",
     "Arch Linux (AUR)",
     "Linux 64-bit",
