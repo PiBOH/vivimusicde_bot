@@ -13,13 +13,24 @@ on:
         type: boolean
         default: false
       include_custom_apk:
-        description: "Also post the custom Android APK links — vivi-gsm.apk / vivi-foss.apk from .releases/apk/latest (manual runs only)"
+        description: "Also post the custom Android APK links — vivi-gms.apk / vivi-foss.apk from .releases/apk/latest (manual runs only)"
         required: false
         type: boolean
         default: false
   schedule:
-    # Every hour: picks up a newly published release within ~60 minutes.
-    - cron: "0 * * * *"
+    # Safety net only: a release normally dispatches this workflow directly
+    # (`Auto Release` -> `notify-bot`), which posts within seconds.
+    #
+    # The poll asks for every hour, but GitHub's scheduler is best-effort and
+    # delays (or drops) runs under load — the top of the hour is the worst
+    # moment of all, and this account's public repos were getting roughly one
+    # run every 3-5 hours with `0 * * * *` (the website's hourly manifest job
+    # shows exactly the same delay). Minute 0 is therefore avoided and the
+    # minute is spread, which is the documented mitigation, but the interval is
+    # deliberately not relied on: the release dispatch is what makes a post
+    # prompt, and this poll only backstops the cases where it did not happen
+    # (a token without access to this repo, a manual release, an outage).
+    - cron: "17 * * * *"
 
 permissions:
   contents: read

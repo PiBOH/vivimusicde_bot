@@ -26,7 +26,7 @@ through the Telegram Bot API.
 ## Custom Android APK
 
 The APKs are **not** release assets any more: `Build Android APK` publishes
-`vivi-gsm.apk`, `vivi-foss.apk` and a `version.json` to `.releases/apk/latest`
+`vivi-gms.apk`, `vivi-foss.apk` and a `version.json` to `.releases/apk/latest`
 on the `apk-latest` branch. The bot does not post them by default; a **manual**
 run can toggle `include_custom_apk` on and it appends the two fixed links
 (sizes read from that `version.json` when reachable).
@@ -35,8 +35,30 @@ run can toggle `include_custom_apk` on and it appends the two fixed links
 
 | Trigger | When |
 |---|---|
-| `schedule` | Hourly poll: posts a new release within ~60 minutes |
+| dispatch from `vivi-music-de` | The moment `Auto Release` publishes a release (`notify-bot` job → `gh workflow run`, with the tag). This is the normal path and it posts within seconds. |
+| `schedule` | Hourly *poll*, a backstop only: it catches a release the dispatch missed (a token without access to this repo, a manual release, an outage). |
 | `workflow_dispatch` | Manual run from the Actions tab (`release_tag`, `force_ignore_cache`, `include_custom_apk`) |
+
+The poll asks for every hour but **must not be relied on for punctuality**. GitHub's
+scheduler is best-effort and this repository was only getting roughly one run
+every **3–5 hours** with `0 * * * *` (the top of the hour is the most congested
+moment, and public repositories are the most affected). The cron was therefore
+moved to an off-minute, but the real fix is the dispatch above: the release knows
+it happened, so the bot does not have to poll to find out.
+
+Every trigger is safe to repeat: the per-tag dedupe cache means a tag is posted
+at most once, so a dispatch and a poll can never double-post the same release.
+
+## Weekly code backup
+
+`code-backup.yml` tags and publishes a patch release every Monday as a
+**backup of this repository's source** — the same shape as the `code backup`
+releases it already carried by hand (tag `1.0.x`, title `v1.0.x`, body
+`code backup`). It is not a release of anything: nothing is built and no assets
+are attached, so the release is purely a restorable snapshot
+(`git checkout 1.0.7`). The patch number is derived from the highest existing
+`1.x.y` tag, and a week with no new commits is skipped instead of tagging the
+same commit twice.
 
 ## Setup
 

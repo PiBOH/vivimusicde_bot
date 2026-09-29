@@ -24,7 +24,7 @@ Environment variables:
   SOURCE_REPO         GitHub repo whose releases we post (default: PiBOH/vivi-music-de)
   RELEASE_TAG         Optional: a specific tag to post (default: latest)
   INCLUDE_CUSTOM_APK  When "true", also post the two custom Android APK links
-                      (vivi-gsm.apk / vivi-foss.apk, read from
+                      (vivi-gms.apk / vivi-foss.apk, read from
                       .releases/apk/latest on the apk-latest branch; manual
                       dispatch runs only, default off)
 
@@ -277,9 +277,11 @@ def os_for_asset(name):
     if lowered.endswith(".dmg") or lowered.endswith(".pkg"):
         return "macOS"
     if lowered.endswith(".apk"):
-        # The Android companion ships two variants: vivi-gsm.apk (with Google
-        # services) and vivi-foss.apk (without). Label them clearly.
-        if "vivi-gsm" in lowered:
+        # The Android companion ships two variants: vivi-gms.apk (with Google
+        # services) and vivi-foss.apk (without). Label them clearly. The old,
+        # transposed `vivi-gsm.apk` spelling stays mapped to the GMS label too,
+        # because builds shipped before the rename look their APK up by it.
+        if "vivi-gms" in lowered or "vivi-gsm" in lowered:
             return "Android (APK) — GMS (with Google services)"
         if "vivi-foss" in lowered:
             return "Android (APK) — FOSS (no Google services)"
@@ -319,7 +321,7 @@ def os_rank(label):
 def custom_apk_assets():
     """The two custom-APK download links, built from the fixed raw URLs.
 
-    `Build Android APK` publishes vivi-gsm.apk / vivi-foss.apk (plus
+    `Build Android APK` publishes vivi-gms.apk / vivi-foss.apk (plus
     version.json) to `.releases/apk/latest` on the `apk-latest` branch, so the
     links never change; the manifest only supplies the sizes (and the build it
     describes), and is optional — without it the links are posted without them.
@@ -345,7 +347,7 @@ def custom_apk_assets():
             "size": sizes.get(name, 0),
             "browser_download_url": APK_LATEST_BASE + "/" + name,
         }
-        for name in ("vivi-gsm.apk", "vivi-foss.apk")
+        for name in ("vivi-gms.apk", "vivi-foss.apk")
     ]
 
 

@@ -1,0 +1,93 @@
+name: Code Backup Release
+
+# A weekly snapshot of this repository, tagged and published as a patch
+# release — the same shape as the `code backup` releases this repo already
+# carries (tag `1.0.x`, title `v1.0.x`, body "code backup"), only automatic.
+#
+# It is a BACKUP, not a release of anything: the bot ships no binaries, the
+# releases hold nothing but the tagged source tree, and their notes say exactly
+# that. Tagging points `1.0.x` at the week's commit, which is what makes it
+# restorable — a release whose asset list is empty is still a perfect snapshot
+# of the code as long as the tag resolves (`git checkout 1.0.7`).
+#
+# Scheduling is best-effort on GitHub (see upload-release.yml): a late run only
+# means the snapshot carries a few more commits, so no counter-measure is needed
+# here. The weekly cadence is not a promise of punctuality, it is a promise of
+# granularity — nothing older than about a week is ever the most recent backup.
+on:
+  schedule:
+    # Monday 04:23 UTC. Deliberately off the hour: the top of the hour is when
+    # the scheduler is most congested.
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    name: Publish the weekly code backup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Tags are what the next version is derived from, and the previous
+          # backup's commit is what decides whether there is anything to back
+          # up — a shallow clone knows neither.
+          fetch-depth: 0
+
+      - name: Resolve the next version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Highest existing `1.x.y` tag, by version order (plain `git tag` is
+          # alphabetical, where 1.0.10 sorts before 1.0.9).
+          LATEST="$(git tag --list '1.*' --sort=-v:refname | head -n 1 || true)"
+          if [[ -z "$LATEST" ]]; then
+            NEXT="1.0.0"
+          else
+            # `1.4.9` -> `1.4.10`; a shorter tag is padded first, so a stray
+            # `1.5` cannot produce `1.6`.
+            NEXT="$(python3 - "$LATEST" <<'PY'
+          import sys
+          parts = sys.argv[1].split(".")
+          while len(parts) < 3:
+              parts.append("0")
+          parts[2] = str(int(parts[2]) + 1)
+          print(".".join(parts[:3]))
+          PY
+          )"
+          fi
+          echo "tag=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "previous=${LATEST:-none}" >> "$GITHUB_OUTPUT"
+          echo "Resolved: last backup ${LATEST:-none} -> next $NEXT"
+
+      - name: Skip when the last backup already covers this commit
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREVIOUS="${{ steps.version.outputs.previous }}"
+          if [[ "$PREVIOUS" != "none" ]] && \
+             [[ "$(git rev-list -n 1 "$PREVIOUS")" == "$(git rev-parse HEAD)" ]]; then
+            echo "Nothing new since $PREVIOUS — no backup needed."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish the backup
+        if: steps.changed.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # No `--generate-notes`: the notes of a backup say what it is, not
+          # what changed (the commit history is the tag's own commit list).
+          gh release create "$TAG" \
+            --title "v$TAG" \
+            --target "$GITHUB_SHA" \
+            --notes "code backup"
